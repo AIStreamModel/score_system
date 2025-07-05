@@ -1,107 +1,97 @@
+# 🎭 脫口秀笑點預測模型 v4cl3
 
-
-# 脫口秀笑點分析模型 (1~100 分預測)
-
-本專案使用訓練好的 BERT 模型，分析中文脫口秀文本的「笑點程度」，預測一段文字在 1～100 範圍內的幽默分數。
+這是一個基於 BERT 的中文多分類模型，用來預測脫口秀段子文字稿的「笑點分數」，範圍為 **1~100 分**。
 
 ---
 
-## ✅ 使用模型進行預測
+## 📦 專案說明
 
-### 1. 環境需求
+- **模型架構**：使用 `bert-base-chinese` 搭建的分類模型（num_labels=100）。
+- **任務類型**：多分類（把 1~100 分數映射成 100 個類別）。
+- **資料來源**：每筆資料含「逐字稿」與「對應的笑點分數」。
+- **訓練標籤轉換**：原始分數 1~100 → 分類標籤 0~99。
 
-- Python 3.8+
-- torch
-- transformers
-- 可選：有 NVIDIA GPU 可加速推論速度
+---
 
-安裝必要套件：
+## 📁 資料格式（JSON）
+
+```json
+{
+  "影片名稱": {
+    "整部影片的逐字稿": "我寫了一段沒有人會生氣的笑話，就是講台海戰爭。",
+    "分數": 87
+  }
+}
+```
+
+---
+
+## 🚀 預測用法
+
+### ✅ 安裝環境
 
 ```bash
 pip install torch transformers
 ```
 
----
-
-### 2. 模型路徑結構
-
-請確認模型已儲存在以下資料夾中：
-
-```
-C:\Users\user\OneDrive\桌面\專題企畫\脫口秀model_classification
-│
-├── config.json
-├── pytorch_model.bin
-├── tokenizer_config.json
-├── vocab.txt
-└── special_tokens_map.json
-```
-
----
-
-### 3. 推論程式（`predict.py`）
+### ✅ 預測程式 `predict.py`
 
 ```python
 import torch
 from transformers import BertTokenizer, BertForSequenceClassification
 
-# 模型路徑
 MODEL_PATH = r"C:\Users\user\OneDrive\桌面\專題企畫\脫口秀model_classification"
-
-# 自動偵測 GPU 或 CPU
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-# 載入 tokenizer 和 model 並移至裝置
 tokenizer = BertTokenizer.from_pretrained(MODEL_PATH)
 model = BertForSequenceClassification.from_pretrained(MODEL_PATH)
 model.to(device)
 model.eval()
 
 def predict_score(text):
-    inputs = tokenizer(text, return_tensors="pt", truncation=True, max_length=512, padding=True)
+    inputs = tokenizer(text, return_tensors="pt", truncation=True, padding=True, max_length=512)
     inputs = {k: v.to(device) for k, v in inputs.items()}
     with torch.no_grad():
         outputs = model(**inputs)
-    logits = outputs.logits
-    pred_label = torch.argmax(logits, dim=1).item()
-    score = pred_label + 1  # 分數範圍為 1~100
-    return score
+    pred_label = torch.argmax(outputs.logits, dim=1).item()
+    return pred_label + 1  # 轉回 1~100 分
 
 if __name__ == "__main__":
-    sample_text = "所以我今年花了一段時間我寫了一段我個人認為他全台灣沒有人在乎的一個主題..."
-    score = predict_score(sample_text)
+    text = "我今年找到了一個不會讓人不爽的方法，就是講沒人關心的主題，比如台海戰爭。"
+    score = predict_score(text)
     print(f"預測笑點分數：{score}")
 ```
 
 ---
 
-### 4. 模型輸出說明
+## 💾 訓練模型儲存格式
 
-- 模型輸出一個整數分數 `1~100`，代表段子預測的笑點強度。
-- 分數越高代表越「有趣」、「引人發笑」。
+訓練後模型會儲存在指定資料夾，例如：
 
----
-
-### 5. 加速建議
-
-若電腦有 NVIDIA GPU，程式會自動使用 CUDA 執行，大幅提升推論速度。
-
-```python
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+```
+脫口秀model_classification/
+├── config.json
+├── pytorch_model.bin
+├── tokenizer_config.json
+├── vocab.txt
+├── special_tokens_map.json
+├── training_args.bin
 ```
 
 ---
 
-### 6. 預測範例輸出
+## 📊 建議訓練參數
 
-```
-預測笑點分數：67
-```
+- 模型：`bert-base-chinese`
+- 批次大小：4
+- Epochs：5
+- 學習率：2e-5
+- 優化目標：分類精度（Accuracy）
 
 ---
 
-### 7. 聯絡資訊
+## 🔧 效能提示
 
-專案作者：  
-專題主題：脫口秀笑點預測 AI  
-如需協助請聯絡...
+- 請優先使用 GPU 執行推論
+- 若輸入句子過長，可考慮斷句後平均預測
+- 若結果偏低，可考慮增加訓練資料、多跑幾輪、或針對高分樣本加權處理
